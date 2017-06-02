@@ -1,0 +1,212 @@
+if GetBot():IsInvulnerable() or not GetBot():IsHero() or not string.find(GetBot():GetUnitName(), "hero") or  GetBot():IsIllusion() then
+	return;
+end
+local ability_item_usage_generic = dofile( GetScriptDirectory().."/ability_item_usage_shutnik" )
+local utils = require(GetScriptDirectory() ..  "/util")
+local mutil = require(GetScriptDirectory() ..  "/Mylogic")
+function AbilityLevelUpThink()  
+	ability_item_usage_generic.AbilityLevelUpThink(); 
+end
+function BuybackUsageThink()
+	ability_item_usage_generic.BuybackUsageThink();
+end
+function CourierUsageThink()
+	ability_item_usage_generic.CourierUsageThink();
+end
+local castFSDesire = 0;
+local castPMDesire = 0;
+local castDRDesire = 0;
+local abilityFS = nil;
+local abilityPM = nil;
+local abilityDR = nil;
+local npcBot = nil;
+function AbilityUsageThink()
+	if npcBot == nil then npcBot = GetBot(); end
+	
+	
+	if mutil.CanNotUseAbility(npcBot) then return end
+	if abilityFS == nil then abilityFS = npcBot:GetAbilityByName( "abyssal_underlord_firestorm" ) end
+	if abilityPM == nil then abilityPM = npcBot:GetAbilityByName( "abyssal_underlord_pit_of_malice" ) end
+	if abilityDR == nil then abilityDR = npcBot:GetAbilityByName( "abyssal_underlord_dark_rift" ) end
+	
+	
+	castFSDesire, castFSLocation = ConsiderFireStorm();
+	castPMDesire, castPMLocation = ConsiderPitOfMalice();
+	castDRDesire, castDRLocation = ConsiderDarkRift();
+	
+	if ( castDRDesire > 0 ) 
+	then
+		npcBot:Action_UseAbilityOnLocation( abilityDR, castDRLocation );
+		return;
+	end
+	
+	if ( castFSDesire > 0 ) 
+	then
+		npcBot:Action_UseAbilityOnLocation( abilityFS, castFSLocation );
+		return;
+	end
+	
+	if ( castPMDesire > 0 ) 
+	then
+		npcBot:Action_UseAbilityOnLocation( abilityPM, castPMLocation );
+		return;
+	end
+	
+end
+function ConsiderFireStorm()
+	
+	if ( not abilityFS:IsFullyCastable() ) 
+	then 
+		return BOT_ACTION_DESIRE_NONE, 0;
+	end
+	
+	local nRadius = abilityFS:GetSpecialValueInt( "radius" );
+	local nCastRange = abilityFS:GetCastRange();
+	local nCastPoint = abilityFS:GetCastPoint( );
+	local nDamage = 6 * abilityFS:GetSpecialValueInt("wave_damage");
+	
+	
+	local npcTarget = npcBot:GetTarget();
+	if ( mutil.IsValidTarget(npcTarget) and mutil.CanCastOnNonMagicImmune(npcTarget) )
+	then
+		if  mutil.CanKillTarget(npcTarget, nDamage, DAMAGE_TYPE_MAGICAL) and mutil.IsInRange(npcTarget, npcBot, nCastRange-200) 
+		then
+			return BOT_ACTION_DESIRE_MODERATE, npcTarget:GetExtrapolatedLocation( nCastPoint );
+		end
+	end
+	if ( npcBot:GetActiveMode() == BOT_MODE_ROSHAN  ) 
+	then
+		local npcTarget = npcBot:GetAttackTarget();
+		if ( mutil.IsRoshan(npcTarget) and mutil.CanCastOnMagicImmune(npcTarget) and mutil.IsInRange(npcTarget, npcBot, nCastRange)  )
+		then
+			return BOT_ACTION_DESIRE_LOW, npcTarget:GetLocation();
+		end
+	end
+	
+	
+	if mutil.IsRetreating(npcBot)
+	then
+		local tableNearbyEnemyHeroes = npcBot:GetNearbyHeroes( nCastRange, true, BOT_MODE_NONE );
+		for _,npcEnemy in pairs( tableNearbyEnemyHeroes )
+		do
+			if ( npcBot:WasRecentlyDamagedByHero( npcEnemy, 2.0 ) ) 
+			then
+				return BOT_ACTION_DESIRE_MODERATE, npcEnemy:GetLocation();
+			end
+		end
+	end
+	
+	
+	if ( npcBot:GetActiveMode() == BOT_MODE_LANING or
+	     mutil.IsDefending(npcBot) or mutil.IsPushing(npcBot) ) and npcBot:GetMana() / npcBot:GetMaxMana() > 0.65
+	then
+		local lanecreeps = npcBot:GetNearbyLaneCreeps(nCastRange+200, true);
+		local locationAoE = npcBot:FindAoELocation( true, false, npcBot:GetLocation(), nCastRange, nRadius/2, 0, 0 );
+		if ( locationAoE.count >= 4 and #lanecreeps >= 4  ) 
+		then
+			return BOT_ACTION_DESIRE_LOW, locationAoE.targetloc;
+		end
+	end
+	
+	
+	if mutil.IsGoingOnSomeone(npcBot)
+	then
+		if ( mutil.IsValidTarget(npcTarget) and mutil.CanCastOnNonMagicImmune(npcTarget) and mutil.IsInRange(npcTarget, npcBot, nCastRange-200) ) 
+		then
+			return BOT_ACTION_DESIRE_MODERATE, npcTarget:GetExtrapolatedLocation( nCastPoint );
+		end
+	end
+	return BOT_ACTION_DESIRE_NONE, 0;
+end
+function ConsiderPitOfMalice()
+	
+	if ( not abilityPM:IsFullyCastable() ) 
+	then 
+		return BOT_ACTION_DESIRE_NONE, 0;
+	end
+	
+	local nRadius = abilityPM:GetSpecialValueInt( "radius" );
+	local nCastRange = abilityPM:GetCastRange();
+	local nCastPoint = abilityPM:GetCastPoint( );
+	local nDamage = 1000
+	
+	
+	if mutil.IsRetreating(npcBot)
+	then
+		local tableNearbyEnemyHeroes = npcBot:GetNearbyHeroes( nCastRange, true, BOT_MODE_NONE );
+		for _,npcEnemy in pairs( tableNearbyEnemyHeroes )
+		do
+			if ( npcBot:WasRecentlyDamagedByHero( npcEnemy, 2.0 ) ) 
+			then
+				return BOT_ACTION_DESIRE_MODERATE, npcEnemy:GetLocation();
+			end
+		end
+	end
+	
+	
+	if  mutil.IsDefending(npcBot) or mutil.IsPushing(npcBot)
+	then
+		local locationAoE = npcBot:FindAoELocation( true, true, npcBot:GetLocation(), nCastRange, nRadius, 0, 1000 );
+		if ( locationAoE.count >= 2 and npcBot:GetMana() / npcBot:GetMaxMana() > 0.8 ) 
+		then
+			return BOT_ACTION_DESIRE_LOW, locationAoE.targetloc;
+		end
+	end
+	
+	
+	if  mutil.IsGoingOnSomeone(npcBot)
+	then
+		local npcTarget = npcBot:GetTarget();
+		if ( mutil.IsValidTarget(npcTarget) and mutil.CanCastOnNonMagicImmune(npcTarget) and mutil.IsInRange(npcTarget, npcBot, nCastRange-200)  ) 
+		then
+			return BOT_ACTION_DESIRE_MODERATE, npcTarget:GetExtrapolatedLocation( nCastPoint );
+		end
+	end
+	return BOT_ACTION_DESIRE_NONE, 0;
+end
+function ConsiderDarkRift()
+	
+	if ( not abilityDR:IsFullyCastable() ) 
+	then 
+		return BOT_ACTION_DESIRE_NONE, 0;
+	end
+	if npcBot:DistanceFromFountain() < 3000 then
+		return BOT_ACTION_DESIRE_NONE, 0;
+	end	
+		
+	
+	local nRadius = abilityDR:GetSpecialValueInt( "radius" );
+	
+	if mutil.IsStuck(npcBot)
+	then
+		return BOT_ACTION_DESIRE_HIGH, GetAncient(GetTeam()):GetLocation();
+	end
+	
+	
+	if mutil.IsRetreating(npcBot)
+	then
+		local tableNearbyEnemyHeroes = npcBot:GetNearbyHeroes( 800, true, BOT_MODE_NONE );
+		for _,npcEnemy in pairs( tableNearbyEnemyHeroes )
+		do
+			if ( npcBot:WasRecentlyDamagedByHero( npcEnemy, 2.0 ) ) 
+			then
+				local location = mutil.GetTeamFountain();
+				return BOT_ACTION_DESIRE_LOW, location;
+			end
+		end
+	end
+	
+	if mutil.IsGoingOnSomeone(npcBot)
+	then
+		local npcTarget = npcBot:GetTarget();
+		if ( mutil.IsValidTarget(npcTarget) and GetUnitToUnitDistance( npcTarget, npcBot ) > 2500 ) 
+		then
+			local tableNearbyEnemyCreeps = npcTarget:GetNearbyCreeps( 800, true );
+			local tableNearbyAllyHeroes = npcBot:GetNearbyHeroes( nRadius, false, BOT_MODE_NONE );
+			if tableNearbyEnemyCreeps ~= nil and tableNearbyAllyHeroes ~= nil and #tableNearbyEnemyCreeps >= 2 and #tableNearbyAllyHeroes >= 2 then
+				return BOT_ACTION_DESIRE_MODERATE, npcTarget:GetLocation();
+			end	
+		end
+	end
+	return BOT_ACTION_DESIRE_NONE, 0;
+end
